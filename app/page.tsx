@@ -15,7 +15,7 @@ export default function Home() {
           </div>
           
           <h1 className={styles.title}>
-            Mentimeter <span className="text-gradient-accent">by Fikavo</span>
+            Darul Aman <span className="text-gradient-accent">Mentimeter</span>
           </h1>
           
           <p className={styles.description}>

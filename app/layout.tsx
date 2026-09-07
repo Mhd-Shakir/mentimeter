@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mentimeter by Fikavo",
+  title: "Darul Aman Mentimeter",
   description: "Realtime interactive presentations powered by Supabase."
 };
 

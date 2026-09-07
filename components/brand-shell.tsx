@@ -11,7 +11,7 @@ export function BrandShell({ children }: { children: React.ReactNode }) {
             <span className={styles.logoIconWrapper}>
               <Sparkles size={16} />
             </span>
-            Mentimeter by Fikavo
+            Darul Aman Mentimeter
           </Link>
           <Link href="/join" className={styles.joinLink}>
             Join quiz
