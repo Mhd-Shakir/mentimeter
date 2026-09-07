@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, BarChart3, Crown, Play, RadioTower, Square, Users } from "lucide-react";
+import { ArrowRight, BarChart3, Crown, Play, RadioTower, Square, Users, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +21,7 @@ export default function PresentPage() {
   const [status, setStatus] = useState("Loading presenter screen...");
   const [loading, setLoading] = useState(true);
   const [showingLeaderboard, setShowingLeaderboard] = useState(false);
+  const [showingResults, setShowingResults] = useState(false);
   const [startedAt, setStartedAt] = useState(Date.now());
   const [timeLeft, setTimeLeft] = useState(0);
   const room = useRoomRealtime(deck?.room_code ?? "");
@@ -81,6 +82,7 @@ export default function PresentPage() {
     if (!room.lastEvent) return;
     if (room.lastEvent.type === "slide-change") {
       setShowingLeaderboard(false);
+      setShowingResults(false);
       setStartedAt(Date.now());
     }
   }, [room.lastEvent]);
@@ -120,6 +122,7 @@ export default function PresentPage() {
 
     setDeck(data);
     setShowingLeaderboard(false);
+    setShowingResults(false);
     const now = new Date();
     setStartedAt(now.getTime());
     await broadcastRoomEvent(supabase, deck.room_code, {
@@ -204,10 +207,16 @@ export default function PresentPage() {
                 Start
               </Button>
             ) : !showingLeaderboard ? (
-              <Button size="sm" onClick={showLeaderboard}>
-                <Crown className="size-3.5" />
-                Show Leaderboard
-              </Button>
+              <>
+                <Button size="sm" variant="outline" className="bg-white" onClick={() => setShowingResults(!showingResults)}>
+                  {showingResults ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  {showingResults ? "Hide Results" : "Show Results"}
+                </Button>
+                <Button size="sm" onClick={showLeaderboard}>
+                  <Crown className="size-3.5" />
+                  Show Leaderboard
+                </Button>
+              </>
             ) : (
               <Button size="sm" onClick={() => goToSlide((deck?.current_slide_index ?? 0) + 1)} disabled={(deck?.current_slide_index ?? 0) >= questions.length - 1}>
                 <ArrowRight className="size-3.5" />
@@ -313,15 +322,21 @@ export default function PresentPage() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm font-bold text-slate-800">{option.option_text}</span>
-                          <span className="font-mono text-sm font-bold text-fikavo-600">{option.count}</span>
+                          {showingResults && <span className="font-mono text-sm font-bold text-fikavo-600">{option.count}</span>}
                         </div>
-                        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border">
-                          <div
-                            className="h-full rounded-full transition-all bg-fikavo-500"
-                            style={{ width: `${option.pct}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-right text-xs text-slate-400">{option.pct}%</p>
+                        {showingResults ? (
+                          <>
+                            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border">
+                              <div
+                                className="h-full rounded-full transition-all bg-fikavo-500"
+                                style={{ width: `${option.pct}%` }}
+                              />
+                            </div>
+                            <p className="mt-1 text-right text-xs text-slate-400">{option.pct}%</p>
+                          </>
+                        ) : (
+                          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border/50" />
+                        )}
                       </div>
                     ))}
                   </div>
