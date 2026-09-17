@@ -24,7 +24,7 @@ export default function PresentPage() {
   const [showingResults, setShowingResults] = useState(false);
   const [startedAt, setStartedAt] = useState(Date.now());
   const [timeLeft, setTimeLeft] = useState(0);
-  const room = useRoomRealtime(deck?.room_code ?? "");
+  const room = useRoomRealtime(deck?.room_code ?? "", "Presenter", { isPresenter: true });
   const activeQuestion = deck ? questions[deck.current_slide_index] : undefined;
   const joinUrl = typeof window === "undefined" || !deck ? "" : `${window.location.origin}/join?code=${deck.room_code}`;
 

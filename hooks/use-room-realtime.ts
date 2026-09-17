@@ -13,7 +13,8 @@ type RoomRealtimeState = {
   participants: { nickname: string; joinedAt: string }[];
 };
 
-export function useRoomRealtime(roomCode: string, nickname?: string) {
+export function useRoomRealtime(roomCode: string, nickname?: string, options?: { isPresenter?: boolean }) {
+  const isPresenter = options?.isPresenter ?? false;
   const supabase = useMemo(() => createClient(), []);
   const [state, setState] = useState<RoomRealtimeState>({
     activeCount: 0,
@@ -26,16 +27,19 @@ export function useRoomRealtime(roomCode: string, nickname?: string) {
   useEffect(() => {
     if (!roomCode) return;
 
-    const channel: RealtimeChannel = supabase
+    let channel: RealtimeChannel = supabase
       .channel(roomChannelName(roomCode), {
         config: {
           presence: { key: nickname || crypto.randomUUID() }
         }
-      })
-      .on("presence", { event: "sync" }, () => {
-        const presenceState = channel.presenceState();
-        const participantsList = Object.values(presenceState)
-          .flatMap((p: any) => p)
+      });
+
+    const handlePresence = () => {
+      const presenceState = channel.presenceState();
+      const rawParticipants = Object.values(presenceState).flatMap((p: any) => p);
+      
+      if (isPresenter) {
+        const participantsList = rawParticipants
           .filter((p: any) => p.nickname && p.nickname !== "Presenter")
           .map((p: any) => ({ nickname: p.nickname, joinedAt: p.joinedAt }));
         
@@ -48,41 +52,24 @@ export function useRoomRealtime(roomCode: string, nickname?: string) {
           activeCount: uniqueParticipants.length,
           participants: uniqueParticipants
         }));
-      })
-      .on("presence", { event: "join" }, () => {
-        const presenceState = channel.presenceState();
-        const participantsList = Object.values(presenceState)
-          .flatMap((p: any) => p)
-          .filter((p: any) => p.nickname && p.nickname !== "Presenter")
-          .map((p: any) => ({ nickname: p.nickname, joinedAt: p.joinedAt }));
-        
-        const uniqueParticipants = Array.from(
-          new Map(participantsList.map((p) => [p.nickname, p])).values()
-        );
-
+      } else {
+        const seen = new Set();
+        rawParticipants.forEach((p: any) => {
+          if (p.nickname && p.nickname !== "Presenter") {
+            seen.add(p.nickname);
+          }
+        });
         setState((current) => ({
           ...current,
-          activeCount: uniqueParticipants.length,
-          participants: uniqueParticipants
+          activeCount: seen.size
         }));
-      })
-      .on("presence", { event: "leave" }, () => {
-        const presenceState = channel.presenceState();
-        const participantsList = Object.values(presenceState)
-          .flatMap((p: any) => p)
-          .filter((p: any) => p.nickname && p.nickname !== "Presenter")
-          .map((p: any) => ({ nickname: p.nickname, joinedAt: p.joinedAt }));
-        
-        const uniqueParticipants = Array.from(
-          new Map(participantsList.map((p) => [p.nickname, p])).values()
-        );
+      }
+    };
 
-        setState((current) => ({
-          ...current,
-          activeCount: uniqueParticipants.length,
-          participants: uniqueParticipants
-        }));
-      })
+    channel = channel
+      .on("presence", { event: "sync" }, handlePresence)
+      .on("presence", { event: "join" }, handlePresence)
+      .on("presence", { event: "leave" }, handlePresence)
       .on("broadcast", { event: "slide-change" }, ({ payload }) => {
         setState((current) => ({ ...current, lastEvent: payload as RoomEvent }));
       })
@@ -103,8 +90,10 @@ export function useRoomRealtime(roomCode: string, nickname?: string) {
         (payload: RealtimePostgresChangesPayload<Database["public"]["Tables"]["presentations"]["Row"]>) => {
           setPresentation(payload.new as Presentation);
         }
-      )
-      .on(
+      );
+
+    if (isPresenter) {
+      channel = channel.on(
         "postgres_changes",
         {
           event: "INSERT",
@@ -120,6 +109,7 @@ export function useRoomRealtime(roomCode: string, nickname?: string) {
           }));
         }
       );
+    }
 
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
@@ -134,7 +124,7 @@ export function useRoomRealtime(roomCode: string, nickname?: string) {
       channel.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, [nickname, roomCode, supabase]);
+  }, [nickname, roomCode, supabase, isPresenter]);
 
   return { ...state, presentation };
 }
