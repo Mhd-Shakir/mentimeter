@@ -134,6 +134,17 @@ export default function PresentPage() {
 
   const showLeaderboard = useCallback(async () => {
     if (!deck) return;
+    
+    // Fetch latest responses from DB to ensure no real-time events were dropped
+    const { data: latestResponses } = await supabase
+      .from("responses")
+      .select("*")
+      .eq("room_code", deck.room_code);
+      
+    if (latestResponses) {
+      setResponses(latestResponses);
+    }
+
     setShowingLeaderboard(true);
     await broadcastRoomEvent(supabase, deck.room_code, {
       type: "leaderboard-show",
@@ -208,7 +219,16 @@ export default function PresentPage() {
               </Button>
             ) : !showingLeaderboard ? (
               <>
-                <Button size="sm" variant="outline" className="bg-white" onClick={() => setShowingResults(!showingResults)}>
+                <Button size="sm" variant="outline" className="bg-white" onClick={async () => {
+                  if (!showingResults && deck) {
+                    const { data: latestResponses } = await supabase
+                      .from("responses")
+                      .select("*")
+                      .eq("room_code", deck.room_code);
+                    if (latestResponses) setResponses(latestResponses);
+                  }
+                  setShowingResults(!showingResults);
+                }}>
                   {showingResults ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   {showingResults ? "Hide Results" : "Show Results"}
                 </Button>
