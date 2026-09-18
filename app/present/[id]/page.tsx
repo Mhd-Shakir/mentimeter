@@ -360,11 +360,17 @@ export default function PresentPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Question {deck ? deck.current_slide_index + 1 : 0} of {questions.length}
                     </p>
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      timeLeft <= 5 ? "bg-red-50 text-red-700 animate-pulse" : "bg-amber-50 text-amber-700"
-                    }`}>
-                      {timeLeft}s
-                    </span>
+                    {showingOptions ? (
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                        timeLeft <= 5 ? "bg-red-50 text-red-700 animate-pulse" : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {timeLeft}s
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                        {activeQuestion.time_limit}s
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-2xl font-black leading-tight text-slate-900 md:text-3xl">
                     {activeQuestion.question_text}
@@ -407,6 +413,23 @@ export default function PresentPage() {
                   <p className="text-center text-sm text-slate-400">
                     {currentResponses.length} response{currentResponses.length !== 1 ? "s" : ""} so far
                   </p>
+                  <div className="mt-8 flex items-center justify-center gap-4">
+                    {!showingOptions && !showingLeaderboard && (
+                      <Button onClick={showOptions} className="animate-pulse shadow-md" size="lg">
+                        Show Options (Enter)
+                      </Button>
+                    )}
+                    {showingOptions && !showingLeaderboard && (
+                      <Button 
+                        onClick={() => goToSlide((deck?.current_slide_index ?? 0) + 1)} 
+                        disabled={(deck?.current_slide_index ?? 0) >= questions.length - 1}
+                        size="lg"
+                        className="shadow-md"
+                      >
+                        Next Question <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </motion.div>
