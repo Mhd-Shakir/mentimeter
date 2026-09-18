@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LayoutDashboard, Plus, Trash2, Wand2, Edit3 } from "lucide-react";
+import { ArrowRight, LayoutDashboard, Plus, Trash2, Wand2, Edit3, LogOut } from "lucide-react";
 import { BrandShell } from "@/components/brand-shell";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -76,6 +76,13 @@ export default function DashboardPage() {
       
       setUserId(authUser.id);
     }
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setUserId(null);
+    setDecks([]);
+    setStatus("Sign in to create presenter decks.");
   }
 
   async function createDeck(event: FormEvent) {
@@ -159,8 +166,18 @@ export default function DashboardPage() {
     <BrandShell>
       <section className={styles.container}>
         <div className={styles.panel}>
-          <LayoutDashboard className={styles.panelIcon} size={28} />
-          <h1 className={styles.panelTitle}>Presenter Dashboard</h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <LayoutDashboard className={styles.panelIcon} size={28} />
+              <h1 className={styles.panelTitle}>Presenter Dashboard</h1>
+            </div>
+            {userId && (
+              <Button size="sm" variant="outline" onClick={handleLogout}>
+                <LogOut size={14} className="mr-2" />
+                Sign out
+              </Button>
+            )}
+          </div>
           <p className={styles.panelCopy}>
             Create live decks, seed questions, and launch presenter mode. Participants never need accounts.
           </p>
