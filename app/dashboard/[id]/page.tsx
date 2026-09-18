@@ -26,6 +26,9 @@ export default function EditDeckPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
 
+  // Edit question state
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+
   // New question form state
   const [questionText, setQuestionText] = useState("");
   const [timeLimit, setTimeLimit] = useState(20);
@@ -91,10 +94,50 @@ export default function EditDeckPage() {
     setStatus("Title updated.");
   }
 
-  async function handleAddQuestion(e: FormEvent) {
+  function handleEditClick(q: QuestionWithOptions) {
+    setEditingQuestionId(q.id);
+    setQuestionText(q.question_text);
+    setTimeLimit(q.time_limit);
+    
+    const newOptions = [
+      { text: "", isCorrect: true },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false },
+    ];
+    
+    q.options.forEach((opt, idx) => {
+      if (idx < 4) {
+        newOptions[idx] = { text: opt.option_text, isCorrect: opt.is_correct };
+      }
+    });
+    
+    // Ensure exactly one is correct if somehow none are
+    if (!newOptions.some(o => o.isCorrect)) {
+        newOptions[0].isCorrect = true;
+    }
+    
+    setOptions(newOptions);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handleCancelEdit() {
+    setEditingQuestionId(null);
+    setQuestionText("");
+    setTimeLimit(20);
+    setOptions([
+      { text: "", isCorrect: true },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false },
+    ]);
+    setStatus("");
+  }
+
+  async function handleSaveQuestion(e: FormEvent) {
     e.preventDefault();
     if (!deck) return;
-    if (questions.length >= MAX_QUESTIONS) return;
+    if (!editingQuestionId && questions.length >= MAX_QUESTIONS) return;
     
     // Validation
     if (!questionText.trim()) {
@@ -111,61 +154,111 @@ export default function EditDeckPage() {
       return;
     }
 
-    setStatus("Adding question...");
-    const orderIndex = questions.length;
+    setStatus(editingQuestionId ? "Updating question..." : "Adding question...");
     
-    // Insert Question
-    const { data: createdQuestion, error: qError } = await supabase
-      .from("questions")
-      .insert({
-        presentation_id: deck.id,
-        question_text: questionText,
-        time_limit: timeLimit,
-        order_index: orderIndex
-      })
-      .select()
-      .single();
+    if (editingQuestionId) {
+      // Update existing question
+      const { data: updatedQuestion, error: qError } = await supabase
+        .from("questions")
+        .update({
+          question_text: questionText,
+          time_limit: timeLimit,
+        })
+        .eq("id", editingQuestionId)
+        .select()
+        .single();
 
-    if (qError || !createdQuestion) {
-      setStatus(qError?.message ?? "Failed to add question.");
-      return;
+      if (qError || !updatedQuestion) {
+        setStatus(qError?.message ?? "Failed to update question.");
+        return;
+      }
+
+      // Delete old options
+      const { error: delError } = await supabase
+        .from("options")
+        .delete()
+        .eq("question_id", editingQuestionId);
+
+      if (delError) {
+         setStatus(delError.message);
+         return;
+      }
+
+      // Insert new options
+      const optionsToInsert = validOptions.map(opt => ({
+        question_id: editingQuestionId,
+        option_text: opt.text.trim(),
+        is_correct: opt.isCorrect
+      }));
+
+      const { data: createdOptions, error: optError } = await supabase
+        .from("options")
+        .insert(optionsToInsert)
+        .select();
+
+      if (optError) {
+        setStatus(optError.message);
+        return;
+      }
+
+      // Update Local State
+      const newQuestion: QuestionWithOptions = {
+        ...updatedQuestion,
+        options: createdOptions ?? []
+      };
+      
+      setQuestions(prev => prev.map(q => q.id === editingQuestionId ? newQuestion : q));
+      
+      handleCancelEdit();
+      setStatus("Question updated successfully!");
+    } else {
+      const orderIndex = questions.length;
+      
+      // Insert Question
+      const { data: createdQuestion, error: qError } = await supabase
+        .from("questions")
+        .insert({
+          presentation_id: deck.id,
+          question_text: questionText,
+          time_limit: timeLimit,
+          order_index: orderIndex
+        })
+        .select()
+        .single();
+
+      if (qError || !createdQuestion) {
+        setStatus(qError?.message ?? "Failed to add question.");
+        return;
+      }
+
+      // Insert Options
+      const optionsToInsert = validOptions.map(opt => ({
+        question_id: createdQuestion.id,
+        option_text: opt.text.trim(),
+        is_correct: opt.isCorrect
+      }));
+
+      const { data: createdOptions, error: optError } = await supabase
+        .from("options")
+        .insert(optionsToInsert)
+        .select();
+
+      if (optError) {
+        setStatus(optError.message);
+        return;
+      }
+
+      // Update Local State
+      const newQuestion: QuestionWithOptions = {
+        ...createdQuestion,
+        options: createdOptions ?? []
+      };
+      
+      setQuestions(prev => [...prev, newQuestion]);
+      
+      handleCancelEdit();
+      setStatus("Question added successfully!");
     }
-
-    // Insert Options
-    const optionsToInsert = validOptions.map(opt => ({
-      question_id: createdQuestion.id,
-      option_text: opt.text.trim(),
-      is_correct: opt.isCorrect
-    }));
-
-    const { data: createdOptions, error: optError } = await supabase
-      .from("options")
-      .insert(optionsToInsert)
-      .select();
-
-    if (optError) {
-      setStatus(optError.message);
-      return;
-    }
-
-    // Update Local State
-    const newQuestion: QuestionWithOptions = {
-      ...createdQuestion,
-      options: createdOptions ?? []
-    };
-    
-    setQuestions(prev => [...prev, newQuestion]);
-    
-    // Reset Form
-    setQuestionText("");
-    setTimeLimit(20);
-    setOptions([
-      { text: "", isCorrect: true },
-      { text: "", isCorrect: false },
-      { text: "", isCorrect: false },
-      { text: "", isCorrect: false },
-    ]);
-    setStatus("Question added successfully!");
   }
 
   async function handleDeleteQuestion(questionId: string) {
@@ -259,16 +352,18 @@ export default function EditDeckPage() {
           {/* Add Question Form */}
           <div className={styles.panel}>
             <h2 className={styles.panelTitle}>
-              Add Question
-              <span className="text-sm font-normal text-slate-400">
-                ({questions.length}/{MAX_QUESTIONS})
-              </span>
+              {editingQuestionId ? "Edit Question" : "Add Question"}
+              {!editingQuestionId && (
+                <span className="text-sm font-normal text-slate-400">
+                  ({questions.length}/{MAX_QUESTIONS})
+                </span>
+              )}
             </h2>
             
-            {questions.length >= MAX_QUESTIONS ? (
+            {!editingQuestionId && questions.length >= MAX_QUESTIONS ? (
               <p className={styles.limitWarning}>You have reached the maximum limit of {MAX_QUESTIONS} questions per deck.</p>
             ) : (
-              <form onSubmit={handleAddQuestion}>
+              <form onSubmit={handleSaveQuestion}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Question Text</label>
                   <input
@@ -321,9 +416,20 @@ export default function EditDeckPage() {
                   </div>
                 </div>
 
-                <Button type="submit" style={{ width: "100%" }}>
-                  <Plus size={16} /> Add Question
-                </Button>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <Button type="submit" style={{ flex: 1 }}>
+                    {editingQuestionId ? (
+                      <><Edit3 size={16} /> Update Question</>
+                    ) : (
+                      <><Plus size={16} /> Add Question</>
+                    )}
+                  </Button>
+                  {editingQuestionId && (
+                    <Button type="button" variant="outline" onClick={handleCancelEdit} style={{ flex: 1, backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
               </form>
             )}
             
@@ -351,13 +457,22 @@ export default function EditDeckPage() {
                         <span className="text-xs font-bold text-slate-400 uppercase mr-2">Q{index + 1}</span>
                         <span className={styles.questionText}>{q.question_text}</span>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        className={styles.deleteButton}
-                        title="Delete question"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button 
+                          onClick={() => handleEditClick(q)}
+                          className={styles.deleteButton}
+                          title="Edit question"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteQuestion(q.id)}
+                          className={styles.deleteButton}
+                          title="Delete question"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                     <div className={styles.questionMeta}>
                       {q.time_limit} seconds
