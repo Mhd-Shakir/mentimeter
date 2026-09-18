@@ -22,6 +22,7 @@ export default function PresentPage() {
   const [loading, setLoading] = useState(true);
   const [showingLeaderboard, setShowingLeaderboard] = useState(false);
   const [showingResults, setShowingResults] = useState(false);
+  const [showingOptions, setShowingOptions] = useState(false);
   const [startedAt, setStartedAt] = useState(Date.now());
   const [timeLeft, setTimeLeft] = useState(0);
   const room = useRoomRealtime(deck?.room_code ?? "", "Presenter", { isPresenter: true });
@@ -83,12 +84,16 @@ export default function PresentPage() {
     if (room.lastEvent.type === "slide-change") {
       setShowingLeaderboard(false);
       setShowingResults(false);
-      setStartedAt(Date.now());
+      setShowingOptions(false);
+      setTimeLeft(activeQuestion?.time_limit ?? 0);
+    } else if (room.lastEvent.type === "options-show") {
+      setShowingOptions(true);
+      setStartedAt(new Date(room.lastEvent.startedAt).getTime());
     }
-  }, [room.lastEvent]);
+  }, [room.lastEvent, activeQuestion]);
 
   useEffect(() => {
-    if (!deck?.is_live || !activeQuestion) return;
+    if (!deck?.is_live || !activeQuestion || !showingOptions) return;
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - startedAt) / 1000;
@@ -123,14 +128,39 @@ export default function PresentPage() {
     setDeck(data);
     setShowingLeaderboard(false);
     setShowingResults(false);
+    setShowingOptions(false);
     const now = new Date();
-    setStartedAt(now.getTime());
     await broadcastRoomEvent(supabase, deck.room_code, {
       type: "slide-change",
       slideIndex: boundedIndex,
       startedAt: now.toISOString()
     });
   }, [deck, questions.length, supabase]);
+
+  const showOptions = useCallback(async () => {
+    if (!deck) return;
+    setShowingOptions(true);
+    const now = new Date();
+    setStartedAt(now.getTime());
+    await broadcastRoomEvent(supabase, deck.room_code, {
+      type: "options-show",
+      slideIndex: deck.current_slide_index,
+      startedAt: now.toISOString()
+    });
+  }, [deck, supabase]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        if (!deck || deck.current_slide_index === -1) return;
+        if (!showingOptions && !showingLeaderboard) {
+          showOptions();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deck, showingOptions, showingLeaderboard, showOptions]);
 
   const showLeaderboard = useCallback(async () => {
     if (!deck) return;
@@ -216,6 +246,11 @@ export default function PresentPage() {
               <Button size="sm" onClick={() => goToSlide(0)}>
                 <Play className="size-3.5" />
                 Start
+              </Button>
+            ) : !showingOptions && !showingLeaderboard ? (
+              <Button size="sm" onClick={showOptions}>
+                <Play className="size-3.5" />
+                Show Options (Enter)
               </Button>
             ) : !showingLeaderboard ? (
               <>
@@ -334,32 +369,41 @@ export default function PresentPage() {
                   <h2 className="text-2xl font-black leading-tight text-slate-900 md:text-3xl">
                     {activeQuestion.question_text}
                   </h2>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {optionVotes.map((option) => (
-                      <div
-                        key={option.id}
-                        className="rounded-xl border p-4 transition-all border-surface-border bg-surface-muted"
+                  <AnimatePresence>
+                    {showingOptions && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="grid gap-3 md:grid-cols-2 mt-6 overflow-hidden"
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-bold text-slate-800">{option.option_text}</span>
-                          {showingResults && <span className="font-mono text-sm font-bold text-fikavo-600">{option.count}</span>}
-                        </div>
-                        {showingResults ? (
-                          <>
-                            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border">
-                              <div
-                                className="h-full rounded-full transition-all bg-fikavo-500"
-                                style={{ width: `${option.pct}%` }}
-                              />
+                        {optionVotes.map((option) => (
+                          <div
+                            key={option.id}
+                            className="rounded-xl border p-4 transition-all border-surface-border bg-surface-muted"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-bold text-slate-800">{option.option_text}</span>
+                              {showingResults && <span className="font-mono text-sm font-bold text-fikavo-600">{option.count}</span>}
                             </div>
-                            <p className="mt-1 text-right text-xs text-slate-400">{option.pct}%</p>
-                          </>
-                        ) : (
-                          <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border/50" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                            {showingResults ? (
+                              <>
+                                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border">
+                                  <div
+                                    className="h-full rounded-full transition-all bg-fikavo-500"
+                                    style={{ width: `${option.pct}%` }}
+                                  />
+                                </div>
+                                <p className="mt-1 text-right text-xs text-slate-400">{option.pct}%</p>
+                              </>
+                            ) : (
+                              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-border/50" />
+                            )}
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <p className="text-center text-sm text-slate-400">
                     {currentResponses.length} response{currentResponses.length !== 1 ? "s" : ""} so far
                   </p>

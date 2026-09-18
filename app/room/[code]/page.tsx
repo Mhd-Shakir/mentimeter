@@ -16,7 +16,7 @@ type AnswerFeedback = {
   optionId: string;
 };
 
-type SlideState = "waiting" | "answering" | "feedback" | "leaderboard" | "ended";
+type SlideState = "waiting" | "question-only" | "answering" | "feedback" | "leaderboard" | "ended";
 
 export default function ParticipantRoomPage() {
   const params = useParams<{ code: string }>();
@@ -31,6 +31,7 @@ export default function ParticipantRoomPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [status, setStatus] = useState("Joining room...");
   const [loadAttempted, setLoadAttempted] = useState(false);
+  const [showingOptions, setShowingOptions] = useState(false);
   const room = useRoomRealtime(roomCode, nickname);
 
   const activeQuestion = presentation && questions
@@ -42,7 +43,7 @@ export default function ParticipantRoomPage() {
     : feedback
       ? "feedback"
       : activeQuestion
-        ? "answering"
+        ? (showingOptions ? "answering" : "question-only")
         : "ended";
 
   useEffect(() => {
@@ -106,8 +107,12 @@ export default function ParticipantRoomPage() {
   useEffect(() => {
     if (!room.lastEvent) return;
     if (room.lastEvent.type === "slide-change") {
-      setStartedAt(Date.now());
       setFeedback(null);
+      setShowingOptions(false);
+    }
+    if (room.lastEvent.type === "options-show") {
+      setShowingOptions(true);
+      setStartedAt(new Date(room.lastEvent.startedAt).getTime());
     }
     if (room.lastEvent.type === "quiz-ended") {
       setPresentation((current) =>
@@ -195,9 +200,40 @@ export default function ParticipantRoomPage() {
             </motion.div>
           )}
 
+          {currentSlideState === "question-only" && activeQuestion && (
+            <motion.div
+              key={activeQuestion.id + "-qonly"}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              className="flex flex-1 flex-col items-center justify-center"
+            >
+              <div className="rounded-2xl border border-surface-border bg-white p-8 text-center shadow-card w-full">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Question {presentation ? presentation.current_slide_index + 1 : "?"}
+                </p>
+                <h2 className="text-2xl font-black leading-tight text-slate-900 mb-6">
+                  {activeQuestion.question_text}
+                </h2>
+                <div className="flex justify-center gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="size-2 animate-bounce rounded-full bg-fikavo-400"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+                <p className="mt-4 text-sm text-slate-500">
+                  Look at the big screen! Options will appear shortly.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {currentSlideState === "answering" && activeQuestion && (
             <motion.div
-              key={activeQuestion.id}
+              key={activeQuestion.id + "-ans"}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
