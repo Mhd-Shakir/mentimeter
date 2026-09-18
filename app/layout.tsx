@@ -3,7 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Darul Aman Mentimeter",
-  description: "Realtime interactive presentations powered by Supabase."
+  description: "Realtime interactive presentations powered by Supabase.",
+  icons: {
+    icon: "data:image/x-icon;base64,"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
