@@ -415,7 +415,7 @@ export default function PresentPage() {
                   </p>
                   <div className="mt-8 flex items-center justify-center gap-4">
                     {!showingOptions && !showingLeaderboard && (
-                      <Button onClick={showOptions} className="animate-pulse shadow-md" size="lg">
+                      <Button onClick={showOptions} className="shadow-md" size="lg">
                         Show Options (Enter)
                       </Button>
                     )}

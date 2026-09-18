@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, CheckCircle2, Play } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Play, Edit3 } from "lucide-react";
 import { BrandShell } from "@/components/brand-shell";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,10 @@ export default function EditDeckPage() {
   const [status, setStatus] = useState("Loading deck...");
   const [loading, setLoading] = useState(true);
   
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+
   // New question form state
   const [questionText, setQuestionText] = useState("");
   const [timeLimit, setTimeLimit] = useState(20);
@@ -55,6 +59,7 @@ export default function EditDeckPage() {
         .order("order_index", { ascending: true });
 
       setDeck(presentation);
+      setEditedTitle(presentation.title);
       setQuestions((loadedQuestions ?? []) as QuestionWithOptions[]);
       setStatus("");
       setLoading(false);
@@ -62,6 +67,29 @@ export default function EditDeckPage() {
 
     load();
   }, [params.id, supabase]);
+
+  async function handleUpdateTitle(e: FormEvent) {
+    e.preventDefault();
+    if (!deck || !editedTitle.trim() || editedTitle === deck.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    
+    setStatus("Updating title...");
+    const { error } = await supabase
+      .from("presentations")
+      .update({ title: editedTitle.trim() })
+      .eq("id", deck.id);
+      
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+    
+    setDeck({ ...deck, title: editedTitle.trim() });
+    setIsEditingTitle(false);
+    setStatus("Title updated.");
+  }
 
   async function handleAddQuestion(e: FormEvent) {
     e.preventDefault();
@@ -199,7 +227,27 @@ export default function EditDeckPage() {
             <ArrowLeft size={20} /> Dashboard
           </Link>
           <span className="text-slate-300">/</span>
-          <h1 className={styles.title}>{deck.title}</h1>
+          {isEditingTitle ? (
+            <form onSubmit={handleUpdateTitle} className="flex-1 max-w-sm flex gap-2">
+              <input
+                autoFocus
+                className={styles.input}
+                style={{ padding: "0.25rem 0.5rem", margin: 0, minHeight: "auto", fontSize: "1.25rem", fontWeight: "bold" }}
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onBlur={handleUpdateTitle}
+              />
+            </form>
+          ) : (
+            <h1 
+              className={`${styles.title} cursor-pointer hover:opacity-80 flex items-center gap-2`}
+              onClick={() => setIsEditingTitle(true)}
+              title="Click to edit title"
+            >
+              {deck.title}
+              <Edit3 size={16} className="text-slate-400" />
+            </h1>
+          )}
           <Button size="sm" asChild style={{ marginLeft: "auto" }}>
             <Link href={`/present/${deck.id}`}>
               <Play size={14} className="mr-1"/> Present

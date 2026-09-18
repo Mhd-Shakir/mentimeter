@@ -17,7 +17,7 @@ export default function DashboardPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
-  const [title, setTitle] = useState("Fikavo Friday Quiz");
+  const [title, setTitle] = useState("");
   const [decks, setDecks] = useState<Presentation[]>([]);
   const [status, setStatus] = useState("Loading workspace...");
   const [loading, setLoading] = useState(true);
@@ -35,6 +35,7 @@ export default function DashboardPage() {
     supabase
       .from("presentations")
       .select("*")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (error) setStatus(error.message);
@@ -114,12 +115,33 @@ export default function DashboardPage() {
   }
 
   async function deleteDeck(deckId: string) {
-    const { error } = await supabase.from("presentations").delete().eq("id", deckId);
-    if (!error) {
+    setStatus("Deleting deck and associated data...");
+    
+    // Bottom-up deletion to avoid RLS ON DELETE CASCADE failures
+    // 1. Find all questions for this deck
+    const { data: qData } = await supabase.from("questions").select("id").eq("presentation_id", deckId);
+    
+    if (qData && qData.length > 0) {
+      const qIds = qData.map(q => q.id);
+      
+      // 2. Delete responses and options for these questions
+      await supabase.from("responses").delete().in("question_id", qIds);
+      await supabase.from("options").delete().in("question_id", qIds);
+      
+      // 3. Delete questions
+      await supabase.from("questions").delete().eq("presentation_id", deckId);
+    }
+
+    // 4. Finally delete the presentation
+    const { data, error } = await supabase.from("presentations").delete().eq("id", deckId).select();
+    
+    if (error) {
+      setStatus(error.message);
+    } else if (!data || data.length === 0) {
+      setStatus("Error: Deck could not be deleted (it might be locked or RLS prevented it).");
+    } else {
       setDecks((current) => current.filter((d) => d.id !== deckId));
       setStatus("Deck deleted.");
-    } else {
-      setStatus(error.message);
     }
   }
 
@@ -172,6 +194,8 @@ export default function DashboardPage() {
                 className={styles.input}
                 value={title} 
                 onChange={(event) => setTitle(event.target.value)} 
+                placeholder="Enter deck title"
+                required
               />
               <Button>
                 <Plus size={16} />
